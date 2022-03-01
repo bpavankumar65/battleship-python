@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import List
 
 class Color(Enum):
     CADET_BLUE = 1
@@ -35,7 +36,7 @@ class Ship(object):
         self.name = name
         self.size = size
         self.color = color
-        self.positions = []
+        self.positions: List[Position] = []
 
     def add_position(self, input: str):
         letter = Letter[input.upper()[:1]]

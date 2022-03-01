@@ -2,6 +2,8 @@ import random
 import os
 import colorama
 import platform
+import time
+from typing import List
 
 from colorama import Fore, Back, Style
 from torpydo.ship import Color, Letter, Position, Ship
@@ -57,11 +59,16 @@ def start_game():
     \    \_/
      """"""""''')
 
+    current_round = 0
+
     while True:
+        current_round += 1
+
         print()
-        print_with_color("Player, it's your turn", color=BColors.CYAN)
-        print_with_color("Keep in mind: The game board has size from A to H and 1 to 8", color=BColors.CYAN)
-        position = parse_position(input("Enter coordinates for your shot (i.e A3):"))
+        print_with_color("Player, it's your turn. Keep in mind: The game board has size from A to H and 1 to 8", color=BColors.CYAN)
+
+        position = parse_position(input(f"Turn {current_round}: Enter coordinates for your shot (i.e A3):"))
+
         is_hit = GameController.check_is_hit(enemyFleet, position)
         if is_hit:
             print_with_color(r'''
@@ -84,12 +91,18 @@ def start_game():
 
         TelemetryClient.trackEvent('Player_ShootPosition', {'custom_dimensions': {'Position': str(position), 'IsHit': is_hit}})
 
+        print_with_color(
+            "Computer is thinking..",
+            color=BColors.CYAN
+        )
+        time.sleep(1.5)
+
         position = get_random_position()
         is_hit = GameController.check_is_hit(myFleet, position)
         print()
         print_with_color(
             f"Computer shoot in {str(position)} and {'hit your ship!' if is_hit else 'miss'}",
-            color=BColors.RED if is_hit else BColors.BLUE
+            color=BColors.RED if is_hit else BColors.YELLOW
         ) 
 
         if is_hit:
@@ -128,6 +141,74 @@ def initialize_game():
 
     initialize_enemyFleet()
 
+def validate_ship_in_field(ship: Ship):
+    for position in ship.positions:
+        if position.row < 1 or position.row > 8:
+            return False
+    return True
+
+def validate_overlapping_ships(ships: List[Ship]):
+    visited_position: List[Position] = []
+    
+    for ship in ships:
+        for position in ship.positions:
+            if position in visited_position:
+                return False
+
+            visited_position.append(position)
+
+    return True
+
+def validate_correct_size(ship: Ship):
+    return ship.size == len(ship.positions)
+
+def validate_no_gap(positions: List[Position]):
+    first_pos = positions[0]
+    last_pos  = positions[-1]
+
+    size = len(positions)
+
+    v_range = list(range(min(p.row for p in positions), max(p.row for p in positions)+1))
+    h_range = list(range(min(p.column.value for p in positions), max(p.column.value for p in positions)+1))
+
+    if len(v_range) == 1:
+        if len(h_range) != size:
+            return False
+
+    elif len(h_range) == 1:
+        if len(v_range) != size:
+            return False
+
+    else:
+        return False
+
+    for position in positions:
+        if position.column.value not in h_range:
+            return False
+        if position.row not in v_range:
+            return False
+
+    return True
+
+def validate_ships(ships: List[Ship]):
+    
+    if not all(validate_correct_size(ship) for ship in ships):
+        return False
+    
+    if not all(validate_no_gap(ship.positions) for ship in ships):
+        return False
+    
+    return validate_overlapping_ships(ships)
+
+def print_matrix(ships: List[Ship]):
+    import numpy
+    m = numpy.zeros([8, 8])
+    for ship in ships:
+        for position in ship.positions:
+            m[position.row-1, position.column.value-1] = ship.size
+
+    print(m)
+    
 def initialize_myFleet():
     global myFleet
 
@@ -149,27 +230,26 @@ def initialize_enemyFleet():
 
     enemyFleet = GameController.initialize_ships()
 
-    enemyFleet[0].positions.append(Position(Letter.B, 4))
-    enemyFleet[0].positions.append(Position(Letter.B, 5))
-    enemyFleet[0].positions.append(Position(Letter.B, 6))
-    enemyFleet[0].positions.append(Position(Letter.B, 7))
-    enemyFleet[0].positions.append(Position(Letter.B, 8))
+    validated_ships = []
 
-    enemyFleet[1].positions.append(Position(Letter.E, 6))
-    enemyFleet[1].positions.append(Position(Letter.E, 7))
-    enemyFleet[1].positions.append(Position(Letter.E, 8))
-    enemyFleet[1].positions.append(Position(Letter.E, 9))
+    for ship in enemyFleet:
+        while True:
 
-    enemyFleet[2].positions.append(Position(Letter.A, 3))
-    enemyFleet[2].positions.append(Position(Letter.B, 3))
-    enemyFleet[2].positions.append(Position(Letter.C, 3))
+            positions = []
+            while len(positions) < ship.size:
+                position = get_random_position()
+                if validate_no_gap(positions + [position]):
+                    positions.append(position)
+                
 
-    enemyFleet[3].positions.append(Position(Letter.F, 8))
-    enemyFleet[3].positions.append(Position(Letter.G, 8))
-    enemyFleet[3].positions.append(Position(Letter.H, 8))
+            ship.positions.extend(positions)
+            if validate_overlapping_ships(validated_ships + [ship]):
+                validated_ships.append(ship)
+                break
 
-    enemyFleet[4].positions.append(Position(Letter.C, 5))
-    enemyFleet[4].positions.append(Position(Letter.C, 6))
+            ship.positions = []
+    
+    print_matrix(enemyFleet)
 
 if __name__ == '__main__':
     main()
