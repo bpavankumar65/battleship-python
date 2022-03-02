@@ -248,8 +248,7 @@ def initialize_enemyFleet():
                 break
 
             ship.positions = []
-    
-    print_matrix(enemyFleet)
+
 
 if __name__ == '__main__':
     main()
