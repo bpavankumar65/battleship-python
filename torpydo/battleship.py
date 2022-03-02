@@ -3,7 +3,7 @@ import os
 import colorama
 import platform
 import time
-from typing import List
+from typing import List, Optional
 
 from colorama import Fore, Back, Style
 from torpydo.ship import Color, Letter, Position, Ship
@@ -147,7 +147,7 @@ def validate_ship_in_field(ship: Ship):
             return False
     return True
 
-def validate_overlapping_ships(ships: List[Ship]):
+def validate_overlapping_ships(ships: List[Ship], check_as_well_position: Optional[Position] = None):
     visited_position: List[Position] = []
     
     for ship in ships:
@@ -156,6 +156,10 @@ def validate_overlapping_ships(ships: List[Ship]):
                 return False
 
             visited_position.append(position)
+
+    if check_as_well_position is not None:
+        if check_as_well_position in visited_position:
+            return False
 
     return True
 
@@ -200,14 +204,59 @@ def validate_ships(ships: List[Ship]):
     
     return validate_overlapping_ships(ships)
 
-def print_matrix(ships: List[Ship]):
+def print_matrix(ships: List[Ship], positions):
     import numpy
-    m = numpy.zeros([8, 8])
+    m = numpy.zeros([8, 8], dtype='int')
+
     for ship in ships:
         for position in ship.positions:
             m[position.row-1, position.column.value-1] = ship.size
 
-    print(m)
+    for position in positions:
+        m[position.row-1, position.column.value-1] = 10
+
+    def get(i: int):
+        if i == 0:
+            color = BColors.BLUE
+            text = "~"
+        elif i == 2:
+            color = BColors.YELLOW
+            text = "P"
+        
+        elif i == 3:
+            color = BColors.YELLOW
+            text = "D"
+
+        elif i == 4:
+            color = BColors.YELLOW
+            text = "B"
+
+        elif i == 5:
+            color = BColors.YELLOW
+            text = "A"
+
+        elif i == 10:
+            color = BColors.RED
+            text = "X"
+
+        return f"{color}{text}{BColors.ENDC}"
+
+    print("")
+    print("  | " + ' | '.join([c for c in "ABCDEFGH"]) + " |")
+    for i, r in enumerate(m):
+        print(f"{i+1} | " + ' | '.join([get(c) for c in r]) + " |")
+
+    print("  ---------------------------------")
+    print("")
+    print("\tX: New Position")
+    print("\tA: Aircraft Carrier")
+    print("\tB: Battleship")
+    print("\tS: Submarine")
+    print("\tD: Destroyer")
+    print("\tP: Patrol Boat")
+    print("")
+    print("")
+
     
 def initialize_myFleet():
     global myFleet
@@ -220,10 +269,46 @@ def initialize_myFleet():
         print()
         print_with_color(f"Please enter the positions for the {ship.name} (size: {ship.size})", color=BColors.CYAN)
 
-        for i in range(ship.size):
-            position_input = input(f"Enter position {i+1} of {ship.size} (i.e A3):")
-            ship.add_position(position_input)
-            TelemetryClient.trackEvent('Player_PlaceShipPosition', {'custom_dimensions': {'Position': position_input, 'Ship': ship.name, 'PositionInShip': i}})
+        while True:
+            clear = False
+            positions = []
+            for i in range(ship.size):
+                while True:
+                    position_input: str = input(f"Enter position {i+1} of {ship.size} (i.e A3) or enter 'clear' to start over:")
+
+                    if position_input == "clear":
+                        clear = True
+                        break
+                    
+                    try:
+                        position = Position.from_str(position_input)
+                    except (ValueError, KeyError):
+                        print_with_color(f"\tPosition {position_input} is not a valid input. Game board has size from A to H and 1 to 8", color=BColors.RED)
+                        continue
+
+                    if not validate_no_gap(positions + [position]):
+                        print_with_color(f"\tYour ship has a hole. It won't swim. Please weld it or build better.", color=BColors.RED)
+                        continue
+
+                    elif not validate_overlapping_ships(myFleet, check_as_well_position=position):
+                        print_with_color(f"\tAnother ship is on this position. Please try again. If you got stuck enter 'clear' to build the ship from scratch.", color=BColors.RED)
+                        continue
+
+                    else:
+                        positions.append(position)
+                        print_matrix(myFleet, positions)
+                        break
+                if clear:
+                    break
+            if clear:
+                continue
+
+            ship.positions = positions
+            break
+
+    return myFleet
+
+            #TelemetryClient.trackEvent('Player_PlaceShipPosition', {'custom_dimensions': {'Position': position_input, 'Ship': ship.name, 'PositionInShip': i}})
 
 def initialize_enemyFleet():
     global enemyFleet
@@ -248,6 +333,7 @@ def initialize_enemyFleet():
                 break
 
             ship.positions = []
+    print(enemyFleet)
 
 
 if __name__ == '__main__':
