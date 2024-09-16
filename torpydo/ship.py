@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import List
 
 class Color(Enum):
     CADET_BLUE = 1
@@ -28,6 +29,16 @@ class Position(object):
     def __str__(self):
         return f"{self.column.name}{self.row}"
 
+    @classmethod
+    def from_str(cls, value: str):
+        letter = Letter[value.upper()[:1]]
+        number = int(value[1:])
+
+        if number < 1 or number > 8:
+            raise ValueError(f"row {number} is not in range [1, 8].")
+
+        return cls(letter, number)
+
     __repr__ = __str__
 
 class Ship(object):
@@ -35,14 +46,10 @@ class Ship(object):
         self.name = name
         self.size = size
         self.color = color
-        self.positions = []
+        self.positions: List[Position] = []
 
     def add_position(self, input: str):
-        letter = Letter[input.upper()[:1]]
-        number = int(input[1:])
-        position = Position(letter, number)
-
-        self.positions.append(Position(letter, number))
+        self.positions.append(Position.from_str(input))
 
     def __str__(self):
         return f"{self.color.name} {self.name} ({self.size}): {self.positions}"
